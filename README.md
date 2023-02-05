@@ -1,6 +1,6 @@
 # Chip-8 Emulator
 
-==WORK IN PROGRESS==
+***WORK IN PROGRESS***
 
 ### Table of Contents
 1. Introduction
