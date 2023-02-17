@@ -11,7 +11,7 @@
 6. Future improvements
 
 ## Introduction
-In this project I created a working CHIP-8 emulator/interpreter. It's written in C, utilizing SDL2 library. 
+In this project I created a working CHIP-8 emulator/interpreter. It's written in C, utilising SDL2 library. 
 
 ## Dependencies
 The only dependency for this program is SDL2.
@@ -28,7 +28,7 @@ To build from source, clone this repository and create a *build* directory insid
 The executable will be there :)
 
 ## Usage
-TODO
+Simply run the program with exactly one argument, being the name of the program you want to run.
 
 ## Compatibility
 TODO
