@@ -9,12 +9,15 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <time.h>
 
 #define WIDTH 64
 #define HEIGHT 32
 #define PIXEL_SIDE 10               // Length of the display's pixel's side
 #define PIXEL_ON 225                // Color of a pixel when turned on
 #define PIXEL_OFF 15                // Color of a pixel when turned off
+
+#define IPS 700                     // Instructions per second
 
 #define MEMORY_SIZE 4096            // 4KB of memory
 #define STARTING_ADDRESS 0x0200     // Initial value of PC
@@ -31,6 +34,8 @@
 #define N (opcode & 0xF)            // Last nibble of opcode
 #define NN (opcode & 0xFF)          // Last two nibbles of opcode
 #define NNN (opcode & 0xFFF)        // Last three nibbles of opcode
+
+#define DELTA_T (((double)(clock() - last_t))/CLOCKS_PER_SEC)
 
 #ifndef SMALL_ENDIAN
 #define DXYN_COND (((pixel_data >> j) & 0x1) == 1) 
@@ -100,9 +105,29 @@ int main(int argc, char *argv[]) {
 
     InitializeDisplay();
 
+    clock_t seconds_t, last_t; 
+    seconds_t = clock();
+
     while(running) {
-        printf("|%x|\t", pc);
+        // Decrement values of timers by 1 every second
+        if (((double)(clock() - seconds_t))/CLOCKS_PER_SEC > 1.0) {
+            seconds_t += 1.0 * CLOCKS_PER_SEC;
+            if (dt > 0) {
+                dt--;
+            }
+            if (st > 0) {
+                st--;
+            }
+        }
+        // Make sure to run at a certain frequency of instructions per second
+        last_t = clock();
+        while (DELTA_T < (1.0/IPS)) {
+            continue;
+        }
         FetchOpcode();
+        /*
+        printf("%f", delta_t);
+        printf("|%x|\t", pc);
         printf("%04x\n", opcode);
         for (int i = 0; i < 16; i++) {
             printf("| v%x %02x ", i, v[i]);
@@ -112,6 +137,7 @@ int main(int argc, char *argv[]) {
             printf("| s%x %02x ", i, stack[i]);
         }
         printf("| ir %04x |\n", ir);
+        */
         //getchar();
         switch (FN) {
             case 0x0:
@@ -314,6 +340,7 @@ int main(int argc, char *argv[]) {
     }
 
     getchar();
+    // Cleanup
     SDL_Quit();
     free(memory);
     return 0;
