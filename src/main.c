@@ -12,24 +12,25 @@
 
 #define WIDTH 64
 #define HEIGHT 32
-#define PIXEL_SIDE 10
-#define PIXEL_ON 225
-#define PIXEL_OFF 15
+#define PIXEL_SIDE 10               // Length of the display's pixel's side
+#define PIXEL_ON 225                // Color of a pixel when turned on
+#define PIXEL_OFF 15                // Color of a pixel when turned off
 
 #define MEMORY_SIZE 4096            // 4KB of memory
 #define STARTING_ADDRESS 0x0200     // Initial value of PC
-#define STACK_SIZE 16             // How many entries allowed in stack
+#define STACK_SIZE 16               // How many entries allowed in stack
 #define REGISTERS_COUNT 0x10        // How many general purpose registers allowed
-#define FONT_ADDRESS 0x0050
+#define FONT_ADDRESS 0x0050         // Address at which font is stored
 
-#define IR (memory + ir)
+#define IR (memory + ir)            // Macro turning I/ir register to a pointer to the location in memory it points to
+#define PC (memory + pc)            // Macro turning pc to a pointer to the location in memory it points to
 
-#define FN (opcode >> 0xC)
-#define X ((opcode >> 0x8) & 0xF)
-#define Y ((opcode >> 0x4) & 0xF)
-#define N (opcode & 0xF)
-#define NN (opcode & 0xFF)
-#define NNN (opcode & 0xFFF)
+#define FN (opcode >> 0xC)          // First nibble of opcode
+#define X ((opcode >> 0x8) & 0xF)   // Second nibble of opcode, which often points to a general purpose register
+#define Y ((opcode >> 0x4) & 0xF)   // Third nibble of opcode, which often points to a general purpose register
+#define N (opcode & 0xF)            // Last nibble of opcode
+#define NN (opcode & 0xFF)          // Last two nibbles of opcode
+#define NNN (opcode & 0xFFF)        // Last three nibbles of opcode
 
 #ifndef SMALL_ENDIAN
 #define DXYN_COND (((pixel_data >> j) & 0x1) == 1) 
@@ -45,20 +46,20 @@ typedef struct {
 
 
 uint8_t *memory;
-uint8_t *pc;                // PC - Program Counter
+uint16_t pc;                // PC - Program Counter
 uint16_t ir;                // IR - Index Register
-uint16_t stack[STACK_SIZE];
-int8_t stack_top = -1;     // What is the current stack entry
+uint16_t stack[STACK_SIZE];     // Stack to save addresses to, when entering a subroutine
+int8_t stack_top = -1;      // The current stack entry index
 uint8_t dt = 0;             // DT - Delay Timer
 uint8_t st = 0;             // ST - Sound Timer
 uint8_t v[REGISTERS_COUNT]; // VR - Variable Registers
 
-Pixel pixels[HEIGHT][WIDTH];
+Pixel pixels[HEIGHT][WIDTH];    // 2D array of pixels to be displayed on screen
 SDL_Window * win;
 SDL_Renderer * rend;
 
 bool running = false;
-uint16_t opcode;
+uint16_t opcode;            // A variable storing 2 bytes long instruction for the emulator
 
 
 void InitializeDisplay();   // Initialize all necessary systems
@@ -66,15 +67,14 @@ void InitializePixels();    // Place pixels on the screen, reset values to OFF
 void InitializeFont();      // Put font data in memory
 void RefreshScreen();       // Clear screen, redraw all pixels, and refresh screen
 void PrintMemory();         // Print a hexdump of the memory to the terminal
-void SetPC(uint16_t address);
-void FetchOpcode();
-void PushStack();
-void PopStack();
+void FetchOpcode();         // Read an opcode from memory and write it to the 'opcode' variable
+void PushStack();           // Push the current address (value of PC) to the stack
+void PopStack();            // Set PC to the top value stored in stack and remove it from stack
 
 
 int main(int argc, char *argv[]) {
     memory = calloc(MEMORY_SIZE, sizeof(uint8_t));
-    SetPC(STARTING_ADDRESS);
+    pc = STARTING_ADDRESS;
     ir = STARTING_ADDRESS; 
 
     if (argc > 1) {
@@ -88,11 +88,11 @@ int main(int argc, char *argv[]) {
         }
         do {
             c = fgetc(file);
-            *pc = c;
+            *PC = c;
             pc++;
         } while (c != EOF);
         fclose(file);
-        SetPC(STARTING_ADDRESS);
+        pc = STARTING_ADDRESS;
         PrintMemory();
         //getchar();
         running = true;
@@ -101,7 +101,7 @@ int main(int argc, char *argv[]) {
     InitializeDisplay();
 
     while(running) {
-        printf("|%x|\t", (uint16_t)(pc - memory));
+        printf("|%x|\t", pc);
         FetchOpcode();
         printf("%04x\n", opcode);
         for (int i = 0; i < 16; i++) {
@@ -130,11 +130,11 @@ int main(int argc, char *argv[]) {
                 running = false;
                 break;
             case 0x1: 
-                SetPC(NNN);
+                pc = NNN;
                 break;
             case 0x2:
                 PushStack();
-                SetPC(NNN);
+                pc = NNN;
                 break;
             case 0x3:
                 if (v[X] == NN) {
@@ -222,9 +222,9 @@ int main(int argc, char *argv[]) {
                 ir = NNN;
                 break;
             case 0xB:
-                SetPC(v[0] + NNN);
+                pc = v[0] + NNN;
 #ifndef COSMAC
-                SetPC(v[X] + NNN);
+                pc = v[X] + NNN;
 #endif
                 break;
             case 0xC:
@@ -282,8 +282,6 @@ int main(int argc, char *argv[]) {
                     case 0x55:
 #ifndef COSMAC
                         for (int i = 0; i <= X; i++) {
-                            printf("%x\n", IR + i);
-                            printf("%x\n", memory + ir + i);
                             *(IR+i) = v[i];
                         }
 #else
@@ -403,18 +401,14 @@ void PrintMemory() {
     }
 }
 
-void SetPC(uint16_t address) {
-    pc = memory + address;
-}
-
 void FetchOpcode() {
-    opcode = (*(pc) << 8) | *(pc+1);
+    opcode = (*(PC) << 8) | *(PC+1);
     pc += 2;
 }
 
 void PushStack() {
     if (stack_top < STACK_SIZE) {
-        stack[++stack_top] = pc - memory;
+        stack[++stack_top] = pc;
     } else {
         running = false;
     }
@@ -422,7 +416,7 @@ void PushStack() {
 
 void PopStack() {
     if (stack_top >= 0) {
-        pc = memory + stack[stack_top--];
+        pc = stack[stack_top--];
     } else {
         running = false;
     }
