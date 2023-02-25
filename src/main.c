@@ -51,30 +51,30 @@ typedef struct {
 
 
 uint8_t *memory;
-uint16_t pc;                // PC - Program Counter
-uint16_t ir;                // IR - Index Register
+uint16_t pc;                    // PC - Program Counter
+uint16_t ir;                    // IR - Index Register
 uint16_t stack[STACK_SIZE];     // Stack to save addresses to, when entering a subroutine
-int8_t stack_top = -1;      // The current stack entry index
-uint8_t dt = 0;             // DT - Delay Timer
-uint8_t st = 0;             // ST - Sound Timer
-uint8_t v[REGISTERS_COUNT]; // VR - Variable Registers
+int8_t stack_top = -1;          // The current stack entry index
+uint8_t dt = 0;                 // DT - Delay Timer
+uint8_t st = 0;                 // ST - Sound Timer
+uint8_t v[REGISTERS_COUNT];     // VR - Variable Registers
 
 Pixel pixels[HEIGHT][WIDTH];    // 2D array of pixels to be displayed on screen
 SDL_Window * win;
 SDL_Renderer * rend;
 
 bool running = false;
-uint16_t opcode;            // A variable storing 2 bytes long instruction for the emulator
+uint16_t opcode;                // A variable storing 2 bytes long instruction for the emulator
 
 
-void InitializeDisplay();   // Initialize all necessary systems
-void InitializePixels();    // Place pixels on the screen, reset values to OFF
-void InitializeFont();      // Put font data in memory
-void RefreshScreen();       // Clear screen, redraw all pixels, and refresh screen
-void PrintMemory();         // Print a hexdump of the memory to the terminal
-void FetchOpcode();         // Read an opcode from memory and write it to the 'opcode' variable
-void PushStack();           // Push the current address (value of PC) to the stack
-void PopStack();            // Set PC to the top value stored in stack and remove it from stack
+void InitializeDisplay();       // Initialize all necessary systems
+void InitializePixels();        // Place pixels on the screen, reset values to OFF
+void InitializeFont();          // Put font data in memory
+void RefreshScreen();           // Clear screen, redraw all pixels, and refresh screen
+void PrintMemory();             // Print a hexdump of the memory to the terminal
+void FetchOpcode();             // Read an opcode from memory and write it to the 'opcode' variable
+void PushStack();               // Push the current address (value of PC) to the stack
+void PopStack();                // Set PC to the top value stored in stack and remove it from stack
 
 
 int main(int argc, char *argv[]) {
@@ -109,7 +109,7 @@ int main(int argc, char *argv[]) {
     seconds_t = clock();
 
     while(running) {
-        // Decrement values of timers by 1 every second
+        // Decrement values of timers by 1 every second (if they are non-zero)
         if (((double)(clock() - seconds_t))/CLOCKS_PER_SEC > 1.0) {
             seconds_t += 1.0 * CLOCKS_PER_SEC;
             if (dt > 0) {
