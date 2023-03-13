@@ -5,6 +5,8 @@
 #include <SDL2/SDL_render.h>
 #include <SDL2/SDL_timer.h>
 #include <SDL2/SDL_video.h>
+#include <SDL2/SDL_events.h>
+#include <SDL2/SDL_keycode.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -13,7 +15,7 @@
 
 #define WIDTH 64
 #define HEIGHT 32
-#define PIXEL_SIDE 10               // Length of the display's pixel's side
+#define PIXEL_SIDE 20               // Length of the display's pixel's side
 #define PIXEL_ON 225                // Color of a pixel when turned on
 #define PIXEL_OFF 15                // Color of a pixel when turned off
 
@@ -63,6 +65,47 @@ Pixel pixels[HEIGHT][WIDTH];    // 2D array of pixels to be displayed on screen
 SDL_Window * win;
 SDL_Renderer * rend;
 
+const uint16_t keycodes[0x10] = {
+    SDLK_x, 
+    SDLK_1,
+    SDLK_2,
+    SDLK_3,
+    SDLK_q,
+    SDLK_w,
+    SDLK_e,
+    SDLK_a,
+    SDLK_s,
+    SDLK_d,
+    SDLK_z,
+    SDLK_c,
+    SDLK_4,
+    SDLK_r,
+    SDLK_f,
+    SDLK_v
+};
+
+bool key_states[0x10] = {
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false,
+    false
+};
+SDL_Rect rect;
+
+bool state;
+
 bool running = false;
 uint16_t opcode;                // A variable storing 2 bytes long instruction for the emulator
 
@@ -108,10 +151,13 @@ int main(int argc, char *argv[]) {
     clock_t seconds_t, last_t; 
     seconds_t = clock();
 
+    uint8_t last_pressed_keycode = -1;
+    bool in_FX0A = false;
+
     while(running) {
-        // Decrement values of timers by 1 every second (if they are non-zero)
-        if (((double)(clock() - seconds_t))/CLOCKS_PER_SEC > 1.0) {
-            seconds_t += 1.0 * CLOCKS_PER_SEC;
+        // Decrement values of timers by 1, 60 times per second (if they are non-zero)
+        if (((double)(clock() - seconds_t))/CLOCKS_PER_SEC > (1.0/60.0)) {
+            seconds_t += 1.0/60.0 * CLOCKS_PER_SEC;
             if (dt > 0) {
                 dt--;
             }
@@ -124,20 +170,56 @@ int main(int argc, char *argv[]) {
         while (DELTA_T < (1.0/IPS)) {
             continue;
         }
+        SDL_Event event;
+        while(SDL_PollEvent(&event)) {
+            switch(event.type) {
+                case SDL_KEYDOWN:
+                    for (int i = 0; i < 0x10; i++) {
+                        if (event.key.keysym.sym == keycodes[i]) {
+                            last_pressed_keycode = i;
+                            key_states[i] = true;
+                            if (in_FX0A) {
+                                in_FX0A = false;
+                                v[X] = i;
+                            }
+                            break;
+                        }
+                    }
+                    printf("Event: %d", event.type);
+                    break;
+                case SDL_KEYUP:
+                    for (int i = 0; i < 0x10; i++) {
+                        if (event.key.keysym.sym == keycodes[i]) {
+                            key_states[i] = false;
+                            break;
+                        }
+                    }
+                    break;
+                case SDL_QUIT:
+                    running = false;
+                    break;
+                default:
+                    //printf("Unknown event: %x\n", event.type);
+                    break;
+            }
+        }
+
+        if (in_FX0A) {
+            RefreshScreen();
+            continue;
+        }
+
         FetchOpcode();
-        /*
-        printf("%f", delta_t);
         printf("|%x|\t", pc);
         printf("%04x\n", opcode);
         for (int i = 0; i < 16; i++) {
             printf("| v%x %02x ", i, v[i]);
         }
-        printf("\n");
+        printf("| dt: %02x |\n", dt);
         for (int i = 0; i < 16; i++) {
             printf("| s%x %02x ", i, stack[i]);
         }
         printf("| ir %04x |\n", ir);
-        */
         //getchar();
         switch (FN) {
             case 0x0:
@@ -267,7 +349,7 @@ int main(int argc, char *argv[]) {
                             if (pixels[y + i][x + j].state == true) {
                                 v[0xF] = 0x1;
                             }
-                            pixels[y + i][x + j].state = ~pixels[y + i][x + j].state;
+                            pixels[y + i][x + j].state = !pixels[y + i][x + j].state;
                         }
                         if (x + j == WIDTH - 1) {
                             break;
@@ -279,10 +361,27 @@ int main(int argc, char *argv[]) {
                 }
                 break;
             }
+            case 0xE:
+                switch (NN) {
+                    case 0x9E:
+                        if (key_states[v[X]])
+                            pc += 2;
+                        break;
+                    case 0xA1:
+                        if (!key_states[v[X]])
+                            pc += 2;
+                        break;
+                    default:
+                        running = false;
+                }
+                break;
             case 0xF:
                 switch (NN) {
                     case 0x07:
                         v[X] = dt;
+                        break;
+                    case 0x0A:
+                        in_FX0A = true;
                         break;
                     case 0x15:
                         dt = v[X];
@@ -292,10 +391,10 @@ int main(int argc, char *argv[]) {
                         break;
                     case 0x1E:
                         ir = (ir + v[X]) & 0xFFFF;
-#ifndef COSMAC
+/*#ifndef COSMAC
                         if (ir > 0x1000)
                             v[0xF] = 0x1;
-#endif
+#endif*/
                         break;
                     case 0x29:
                         ir = FONT_ADDRESS + v[X] * 5;
